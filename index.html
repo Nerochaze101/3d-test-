@@ -31,18 +31,34 @@
       left: 12px;
       right: 12px;
       display: flex;
+      flex-wrap: wrap;
       justify-content: space-between;
+      gap: 8px;
       align-items: center;
       pointer-events: none;
     }
     .badge {
-      background: rgba(15, 23, 42, 0.78);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(255, 255, 255, 0.16);
       padding: 6px 12px;
       border-radius: 999px;
-      font-size: 0.85rem;
+      font-size: 0.82rem;
       font-weight: 700;
       backdrop-filter: blur(6px);
+    }
+    #errorBanner {
+      display: none;
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
+      background: rgba(127, 29, 29, 0.92);
+      border: 1px solid #f87171;
+      color: #fef2f2;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 0.8rem;
+      z-index: 20;
     }
     .controls {
       background: #1e293b;
@@ -73,8 +89,8 @@
   <script type="importmap">
     {
       "imports": {
-        "three": "https://unpkg.com/three@0.170.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.170.0/examples/jsm/"
+        "three": "https://esm.sh/three@0.170.0",
+        "three/addons/": "https://esm.sh/three@0.170.0/examples/jsm/"
       }
     }
   </script>
@@ -82,9 +98,10 @@
 <body>
   <div id="canvasWrap">
     <div class="hud-top">
-      <div class="badge" id="beatText">0.0s — Boy & Dog Running in the Park</div>
+      <div class="badge" id="beatText">Loading 3D scene...</div>
       <div class="badge" id="camLabel">Cam: Follow</div>
     </div>
+    <div id="errorBanner"></div>
   </div>
 
   <div class="controls">
@@ -110,436 +127,445 @@
     const camLabel = document.getElementById("camLabel");
     const playPauseBtn = document.getElementById("playPauseBtn");
     const camBtn = document.getElementById("camBtn");
+    const errorBanner = document.getElementById("errorBanner");
 
-    // 1. Scene, Camera & Renderer
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x7dd3fc);
-    scene.fog = new THREE.Fog(0x7dd3fc, 22, 65);
-
-    const camera = new THREE.PerspectiveCamera(50, wrap.clientWidth / wrap.clientHeight, 0.1, 120);
-    camera.position.set(0, 4.5, 11);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(wrap.clientWidth, wrap.clientHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    wrap.appendChild(renderer.domElement);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.maxPolarAngle = Math.PI / 2 - 0.05;
-
-    // 2. Bright Cartoon Park Lighting
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x4ade80, 1.1);
-    scene.add(hemiLight);
-
-    const sunLight = new THREE.DirectionalLight(0xfffbeb, 1.8);
-    sunLight.position.set(12, 20, 10);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(1024, 1024);
-    sunLight.shadow.camera.near = 1;
-    sunLight.shadow.camera.far = 55;
-    const d = 16;
-    sunLight.shadow.camera.left = -d;
-    sunLight.shadow.camera.right = d;
-    sunLight.shadow.camera.top = d;
-    sunLight.shadow.camera.bottom = -d;
-    scene.add(sunLight);
-
-    // 3. Park Environment (Grass, Dirt Running Track, Stylized Trees)
-    const grass = new THREE.Mesh(
-      new THREE.CircleGeometry(45, 48),
-      new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.85 })
-    );
-    grass.rotation.x = -Math.PI / 2;
-    grass.receiveShadow = true;
-    scene.add(grass);
-
-    // Dirt path ring (radius 6)
-    const track = new THREE.Mesh(
-      new THREE.RingGeometry(4.8, 7.2, 64),
-      new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.9 })
-    );
-    track.rotation.x = -Math.PI / 2;
-    track.position.y = 0.01;
-    track.receiveShadow = true;
-    scene.add(track);
-
-    function createTree(x, z, scale = 1) {
-      const tree = new THREE.Group();
-      const trunk = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.22, 0.32, 1.6, 8),
-        new THREE.MeshStandardMaterial({ color: 0x92400e })
-      );
-      trunk.position.y = 0.8;
-      trunk.castShadow = true;
-
-      const leaves1 = new THREE.Mesh(
-        new THREE.ConeGeometry(1.3, 2.2, 10),
-        new THREE.MeshStandardMaterial({ color: 0x16a34a })
-      );
-      leaves1.position.y = 2.2;
-      leaves1.castShadow = true;
-
-      const leaves2 = new THREE.Mesh(
-        new THREE.ConeGeometry(1.0, 1.8, 10),
-        new THREE.MeshStandardMaterial({ color: 0x22c55e })
-      );
-      leaves2.position.y = 3.2;
-      leaves2.castShadow = true;
-
-      tree.add(trunk, leaves1, leaves2);
-      tree.position.set(x, 0, z);
-      tree.scale.setScalar(scale);
-      scene.add(tree);
+    function showError(msg) {
+      errorBanner.style.display = "block";
+      errorBanner.textContent = msg;
+      beatText.textContent = "Error loading scene";
     }
 
-    createTree(-10, -8, 1.2);
-    createTree(11, -7, 1.0);
-    createTree(-12, 9, 1.1);
-    createTree(10, 10, 1.3);
-    createTree(0, -14, 1.4);
+    window.addEventListener("error", (e) => {
+      showError(e.message || "Script error occurred");
+    });
 
-    // 4. Built-in Articulated 3D Boy Character
-    function createBoyRig() {
-      const root = new THREE.Group();
-      const skin = new THREE.MeshStandardMaterial({ color: 0xf6c29f });
-      const shirt = new THREE.MeshStandardMaterial({ color: 0x16a34a }); // Green jacket/tee
-      const pants = new THREE.MeshStandardMaterial({ color: 0x1e3a8a });
-      const hairMat = new THREE.MeshStandardMaterial({ color: 0x451a03 });
-      const shoeMat = new THREE.MeshStandardMaterial({ color: 0xef4444 });
+    window.addEventListener("unhandledrejection", (e) => {
+      showError(e.reason?.message || "Failed to load module or asset");
+    });
 
-      const body = new THREE.Group();
-      body.position.y = 1.05;
-      root.add(body);
+    try {
+      const width = Math.max(wrap.clientWidth, 300);
+      const height = Math.max(wrap.clientHeight, 240);
 
-      const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.45, 6, 12), shirt);
-      torso.castShadow = true;
-      body.add(torso);
+      // 1. Scene, Camera & Renderer
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x7dd3fc);
+      scene.fog = new THREE.Fog(0x7dd3fc, 22, 65);
 
-      // Head
-      const head = new THREE.Group();
-      head.position.y = 0.62;
-      body.add(head);
+      const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 120);
+      camera.position.set(0, 4.5, 11);
 
-      const skull = new THREE.Mesh(new THREE.SphereGeometry(0.27, 16, 16), skin);
-      skull.castShadow = true;
-      head.add(skull);
+      const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+      renderer.setSize(width, height);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFShadowMap;
+      wrap.appendChild(renderer.domElement);
 
-      const hair = new THREE.Mesh(
-        new THREE.SphereGeometry(0.285, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
-        hairMat
+      const controls = new OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.maxPolarAngle = Math.PI / 2 - 0.05;
+
+      // 2. Bright Cartoon Park Lighting
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x4ade80, 1.15);
+      scene.add(hemiLight);
+
+      const sunLight = new THREE.DirectionalLight(0xfffbeb, 1.7);
+      sunLight.position.set(12, 20, 10);
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.set(1024, 1024);
+      sunLight.shadow.camera.near = 1;
+      sunLight.shadow.camera.far = 55;
+      const d = 16;
+      sunLight.shadow.camera.left = -d;
+      sunLight.shadow.camera.right = d;
+      sunLight.shadow.camera.top = d;
+      sunLight.shadow.camera.bottom = -d;
+      scene.add(sunLight);
+
+      // 3. Park Environment (Grass, Dirt Running Track, Stylized Trees)
+      const grass = new THREE.Mesh(
+        new THREE.CircleGeometry(45, 36),
+        new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.85 })
       );
-      hair.rotation.x = -0.25;
-      head.add(hair);
+      grass.rotation.x = -Math.PI / 2;
+      grass.receiveShadow = true;
+      scene.add(grass);
 
-      // Eyes
-      const eyeGeo = new THREE.SphereGeometry(0.035, 8, 8);
-      const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
-      const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-      leftEye.position.set(-0.09, 0.03, 0.24);
-      const rightEye = leftEye.clone();
-      rightEye.position.x = 0.09;
-      head.add(leftEye, rightEye);
-
-      // Arms
-      function makeArm(side) {
-        const pivot = new THREE.Group();
-        pivot.position.set(side * 0.34, 0.25, 0);
-        const armMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.38, 4, 8), skin);
-        armMesh.position.y = -0.2;
-        armMesh.castShadow = true;
-        pivot.add(armMesh);
-        body.add(pivot);
-        return pivot;
-      }
-      const leftArm = makeArm(-1);
-      const rightArm = makeArm(1);
-
-      // Legs
-      function makeLeg(side) {
-        const pivot = new THREE.Group();
-        pivot.position.set(side * 0.14, -0.32, 0);
-        const legMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, 0.44, 4, 8), pants);
-        legMesh.position.y = -0.24;
-        legMesh.castShadow = true;
-        const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.32), shoeMat);
-        shoe.position.set(0, -0.5, 0.06);
-        shoe.castShadow = true;
-        pivot.add(legMesh, shoe);
-        body.add(pivot);
-        return pivot;
-      }
-      const leftLeg = makeLeg(-1);
-      const rightLeg = makeLeg(1);
-
-      return { root, body, head, leftArm, rightArm, leftLeg, rightLeg, isCustomGlb: false };
-    }
-
-    // 5. Built-in Articulated 3D Playful Dog Character
-    function createDogRig() {
-      const root = new THREE.Group();
-      const fur = new THREE.MeshStandardMaterial({ color: 0xd97706 });
-      const earMat = new THREE.MeshStandardMaterial({ color: 0x78350f });
-      const collarMat = new THREE.MeshStandardMaterial({ color: 0xef4444 });
-
-      const body = new THREE.Group();
-      body.position.y = 0.52;
-      root.add(body);
-
-      const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, 0.46, 6, 12), fur);
-      torso.rotation.x = Math.PI / 2;
-      torso.castShadow = true;
-      body.add(torso);
-
-      const collar = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.03, 8, 16), collarMat);
-      collar.position.set(0, 0.06, 0.25);
-      collar.rotation.x = 0.4;
-      body.add(collar);
-
-      // Head & Snout
-      const head = new THREE.Group();
-      head.position.set(0, 0.22, 0.34);
-      body.add(head);
-
-      const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 12), fur);
-      cranium.castShadow = true;
-      const snout = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.11, 0.18), fur);
-      snout.position.set(0, -0.03, 0.16);
-      const nose = new THREE.Mesh(
-        new THREE.SphereGeometry(0.035, 8, 8),
-        new THREE.MeshBasicMaterial({ color: 0x090d16 })
+      const track = new THREE.Mesh(
+        new THREE.RingGeometry(4.8, 7.2, 48),
+        new THREE.MeshStandardMaterial({ color: 0xfde68a, roughness: 0.9 })
       );
-      nose.position.set(0, 0.01, 0.25);
+      track.rotation.x = -Math.PI / 2;
+      track.position.y = 0.01;
+      track.receiveShadow = true;
+      scene.add(track);
 
-      const earL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.18, 0.1), earMat);
-      earL.position.set(-0.16, 0.02, -0.02);
-      earL.rotation.z = 0.25;
-      const earR = earL.clone();
-      earR.position.x = 0.16;
-      earR.rotation.z = -0.25;
+      function createTree(x, z, scale = 1) {
+        const tree = new THREE.Group();
+        const trunk = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.22, 0.32, 1.6, 8),
+          new THREE.MeshStandardMaterial({ color: 0x92400e })
+        );
+        trunk.position.y = 0.8;
+        trunk.castShadow = true;
 
-      head.add(cranium, snout, nose, earL, earR);
+        const leaves1 = new THREE.Mesh(
+          new THREE.ConeGeometry(1.3, 2.2, 10),
+          new THREE.MeshStandardMaterial({ color: 0x16a34a })
+        );
+        leaves1.position.y = 2.2;
+        leaves1.castShadow = true;
 
-      // Wagging Tail
-      const tail = new THREE.Group();
-      tail.position.set(0, 0.1, -0.32);
-      const tailMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.04, 0.24, 4, 8), earMat);
-      tailMesh.position.set(0, 0.12, -0.06);
-      tailMesh.rotation.x = -0.5;
-      tail.add(tailMesh);
-      body.add(tail);
+        const leaves2 = new THREE.Mesh(
+          new THREE.ConeGeometry(1.0, 1.8, 10),
+          new THREE.MeshStandardMaterial({ color: 0x22c55e })
+        );
+        leaves2.position.y = 3.2;
+        leaves2.castShadow = true;
 
-      // 4 Paws
-      function makePaw(x, z) {
-        const pivot = new THREE.Group();
-        pivot.position.set(x, -0.1, z);
-        const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.26, 4, 8), fur);
-        leg.position.y = -0.15;
-        leg.castShadow = true;
-        pivot.add(leg);
-        body.add(pivot);
-        return pivot;
+        tree.add(trunk, leaves1, leaves2);
+        tree.position.set(x, 0, z);
+        tree.scale.setScalar(scale);
+        scene.add(tree);
       }
 
-      const fl = makePaw(-0.12, 0.2);
-      const fr = makePaw(0.12, 0.2);
-      const bl = makePaw(-0.12, -0.2);
-      const br = makePaw(0.12, -0.2);
+      createTree(-10, -8, 1.2);
+      createTree(11, -7, 1.0);
+      createTree(-12, 9, 1.1);
+      createTree(10, 10, 1.3);
+      createTree(0, -14, 1.4);
 
-      return { root, body, head, tail, fl, fr, bl, br, isCustomGlb: false };
-    }
+      // 4. Built-in Articulated 3D Boy Character
+      function createBoyRig() {
+        const root = new THREE.Group();
+        const skin = new THREE.MeshStandardMaterial({ color: 0xf6c29f });
+        const shirt = new THREE.MeshStandardMaterial({ color: 0x16a34a });
+        const pants = new THREE.MeshStandardMaterial({ color: 0x1e3a8a });
+        const hairMat = new THREE.MeshStandardMaterial({ color: 0x451a03 });
+        const shoeMat = new THREE.MeshStandardMaterial({ color: 0xef4444 });
 
-    let boy = createBoyRig();
-    let dog = createDogRig();
-    scene.add(boy.root, dog.root);
+        const body = new THREE.Group();
+        body.position.y = 1.05;
+        root.add(body);
 
-    let boyMixer = null;
-    let dogMixer = null;
+        const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.26, 0.45, 6, 12), shirt);
+        torso.castShadow = true;
+        body.add(torso);
 
-    // 6. Optional .GLB Model Loader (Drop in real 3D models anytime)
-    const gltfLoader = new GLTFLoader();
+        const head = new THREE.Group();
+        head.position.y = 0.62;
+        body.add(head);
 
-    function handleGlbUpload(inputEl, targetType) {
-      inputEl.addEventListener("change", (e) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        const url = URL.createObjectURL(file);
+        const skull = new THREE.Mesh(new THREE.SphereGeometry(0.27, 16, 16), skin);
+        skull.castShadow = true;
+        head.add(skull);
 
-        gltfLoader.load(url, (gltf) => {
-          const model = gltf.scene;
-          model.traverse((node) => {
-            if (node.isMesh) {
-              node.castShadow = true;
-              node.receiveShadow = true;
+        const hair = new THREE.Mesh(
+          new THREE.SphereGeometry(0.285, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
+          hairMat
+        );
+        hair.rotation.x = -0.25;
+        head.add(hair);
+
+        const eyeGeo = new THREE.SphereGeometry(0.035, 8, 8);
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+        const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+        leftEye.position.set(-0.09, 0.03, 0.24);
+        const rightEye = leftEye.clone();
+        rightEye.position.x = 0.09;
+        head.add(leftEye, rightEye);
+
+        function makeArm(side) {
+          const pivot = new THREE.Group();
+          pivot.position.set(side * 0.34, 0.25, 0);
+          const armMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.08, 0.38, 4, 8), skin);
+          armMesh.position.y = -0.2;
+          armMesh.castShadow = true;
+          pivot.add(armMesh);
+          body.add(pivot);
+          return pivot;
+        }
+        const leftArm = makeArm(-1);
+        const rightArm = makeArm(1);
+
+        function makeLeg(side) {
+          const pivot = new THREE.Group();
+          pivot.position.set(side * 0.14, -0.32, 0);
+          const legMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.095, 0.44, 4, 8), pants);
+          legMesh.position.y = -0.24;
+          legMesh.castShadow = true;
+          const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.12, 0.32), shoeMat);
+          shoe.position.set(0, -0.5, 0.06);
+          shoe.castShadow = true;
+          pivot.add(legMesh, shoe);
+          body.add(pivot);
+          return pivot;
+        }
+        const leftLeg = makeLeg(-1);
+        const rightLeg = makeLeg(1);
+
+        return { root, body, head, leftArm, rightArm, leftLeg, rightLeg, isCustomGlb: false };
+      }
+
+      // 5. Built-in Articulated 3D Playful Dog Character
+      function createDogRig() {
+        const root = new THREE.Group();
+        const fur = new THREE.MeshStandardMaterial({ color: 0xd97706 });
+        const earMat = new THREE.MeshStandardMaterial({ color: 0x78350f });
+        const collarMat = new THREE.MeshStandardMaterial({ color: 0xef4444 });
+
+        const body = new THREE.Group();
+        body.position.y = 0.52;
+        root.add(body);
+
+        const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.19, 0.46, 6, 12), fur);
+        torso.rotation.x = Math.PI / 2;
+        torso.castShadow = true;
+        body.add(torso);
+
+        const collar = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.03, 8, 16), collarMat);
+        collar.position.set(0, 0.06, 0.25);
+        collar.rotation.x = 0.4;
+        body.add(collar);
+
+        const head = new THREE.Group();
+        head.position.set(0, 0.22, 0.34);
+        body.add(head);
+
+        const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 12), fur);
+        cranium.castShadow = true;
+        const snout = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.11, 0.18), fur);
+        snout.position.set(0, -0.03, 0.16);
+        const nose = new THREE.Mesh(
+          new THREE.SphereGeometry(0.035, 8, 8),
+          new THREE.MeshBasicMaterial({ color: 0x090d16 })
+        );
+        nose.position.set(0, 0.01, 0.25);
+
+        const earL = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.18, 0.1), earMat);
+        earL.position.set(-0.16, 0.02, -0.02);
+        earL.rotation.z = 0.25;
+        const earR = earL.clone();
+        earR.position.x = 0.16;
+        earR.rotation.z = -0.25;
+
+        head.add(cranium, snout, nose, earL, earR);
+
+        const tail = new THREE.Group();
+        tail.position.set(0, 0.1, -0.32);
+        const tailMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.04, 0.24, 4, 8), earMat);
+        tailMesh.position.set(0, 0.12, -0.06);
+        tailMesh.rotation.x = -0.5;
+        tail.add(tailMesh);
+        body.add(tail);
+
+        function makePaw(x, z) {
+          const pivot = new THREE.Group();
+          pivot.position.set(x, -0.1, z);
+          const leg = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.26, 4, 8), fur);
+          leg.position.y = -0.15;
+          leg.castShadow = true;
+          pivot.add(leg);
+          body.add(pivot);
+          return pivot;
+        }
+
+        const fl = makePaw(-0.12, 0.2);
+        const fr = makePaw(0.12, 0.2);
+        const bl = makePaw(-0.12, -0.2);
+        const br = makePaw(0.12, -0.2);
+
+        return { root, body, head, tail, fl, fr, bl, br, isCustomGlb: false };
+      }
+
+      let boy = createBoyRig();
+      let dog = createDogRig();
+      scene.add(boy.root, dog.root);
+
+      let boyMixer = null;
+      let dogMixer = null;
+
+      // 6. Optional .GLB Model Loader
+      const gltfLoader = new GLTFLoader();
+
+      function handleGlbUpload(inputEl, targetType) {
+        inputEl.addEventListener("change", (e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const url = URL.createObjectURL(file);
+
+          gltfLoader.load(
+            url,
+            (gltf) => {
+              const model = gltf.scene;
+              model.traverse((node) => {
+                if (node.isMesh) {
+                  node.castShadow = true;
+                  node.receiveShadow = true;
+                }
+              });
+
+              const box = new THREE.Box3().setFromObject(model);
+              const size = new THREE.Vector3();
+              box.getSize(size);
+              const desiredHeight = targetType === "boy" ? 1.8 : 0.85;
+              const scale = desiredHeight / (size.y || 1);
+              model.scale.setScalar(scale);
+
+              if (targetType === "boy") {
+                scene.remove(boy.root);
+                boy = { root: model, isCustomGlb: true };
+                scene.add(boy.root);
+                if (gltf.animations.length > 0) {
+                  boyMixer = new THREE.AnimationMixer(model);
+                  const runClip =
+                    THREE.AnimationClip.findByName(gltf.animations, "Run") ||
+                    THREE.AnimationClip.findByName(gltf.animations, "Running") ||
+                    gltf.animations[0];
+                  boyMixer.clipAction(runClip).play();
+                }
+              } else {
+                scene.remove(dog.root);
+                dog = { root: model, isCustomGlb: true };
+                scene.add(dog.root);
+                if (gltf.animations.length > 0) {
+                  dogMixer = new THREE.AnimationMixer(model);
+                  const runClip =
+                    THREE.AnimationClip.findByName(gltf.animations, "Run") ||
+                    gltf.animations[0];
+                  dogMixer.clipAction(runClip).play();
+                }
+              }
+              URL.revokeObjectURL(url);
+            },
+            undefined,
+            (err) => {
+              URL.revokeObjectURL(url);
+              showError("Could not load .GLB model: " + (err?.message || "Invalid file"));
             }
-          });
-
-          // Auto-normalize height
-          const box = new THREE.Box3().setFromObject(model);
-          const size = new THREE.Vector3();
-          box.getSize(size);
-          const desiredHeight = targetType === "boy" ? 1.8 : 0.85;
-          const scale = desiredHeight / (size.y || 1);
-          model.scale.setScalar(scale);
-
-          if (targetType === "boy") {
-            scene.remove(boy.root);
-            boy = { root: model, isCustomGlb: true };
-            scene.add(boy.root);
-            if (gltf.animations.length > 0) {
-              boyMixer = new THREE.AnimationMixer(model);
-              const runClip =
-                THREE.AnimationClip.findByName(gltf.animations, "Run") ||
-                THREE.AnimationClip.findByName(gltf.animations, "Running") ||
-                gltf.animations[0];
-              boyMixer.clipAction(runClip).play();
-            }
-          } else {
-            scene.remove(dog.root);
-            dog = { root: model, isCustomGlb: true };
-            scene.add(dog.root);
-            if (gltf.animations.length > 0) {
-              dogMixer = new THREE.AnimationMixer(model);
-              const runClip =
-                THREE.AnimationClip.findByName(gltf.animations, "Run") ||
-                gltf.animations[0];
-              dogMixer.clipAction(runClip).play();
-            }
-          }
-          URL.revokeObjectURL(url);
+          );
         });
-      });
-    }
-
-    handleGlbUpload(document.getElementById("boyGlbInput"), "boy");
-    handleGlbUpload(document.getElementById("dogGlbInput"), "dog");
-
-    // 7. Animation & Script Timeline Loop (10s cycle)
-    const timer = new THREE.Timer();
-    timer.connect(document);
-
-    let elapsed = 0;
-    let isPaused = false;
-    let camMode = 0; // 0 = Follow, 1 = Wide Park, 2 = Low Action
-    const camNames = ["Follow", "Wide Park", "Low Action"];
-
-    playPauseBtn.addEventListener("click", () => {
-      isPaused = !isPaused;
-      playPauseBtn.textContent = isPaused ? "Play" : "Pause";
-    });
-
-    camBtn.addEventListener("click", () => {
-      camMode = (camMode + 1) % camNames.length;
-      camLabel.textContent = `Cam: ${camNames[camMode]}`;
-    });
-
-    function animate() {
-      timer.update();
-      const delta = timer.getDelta();
-
-      if (!isPaused) {
-        elapsed += delta;
-        const loopSec = elapsed % 10;
-
-        // Update mixers if custom .GLB models were loaded
-        if (boyMixer) boyMixer.update(delta);
-        if (dogMixer) dogMixer.update(delta);
-
-        // Circular running path around the park track (radius = 6)
-        const radius = 6.0;
-        const speed = 0.75; // radians per second
-        const boyAngle = elapsed * speed;
-        const dogAngle = boyAngle - 0.34; // Dog chases right behind the boy
-
-        // Boy position & forward tangent rotation
-        const bx = Math.cos(boyAngle) * radius;
-        const bz = Math.sin(boyAngle) * radius;
-        boy.root.position.set(bx, 0, bz);
-        boy.root.rotation.y = -boyAngle;
-
-        // Dog position (weaves playfully side-to-side while chasing)
-        const weave = Math.sin(elapsed * 5) * 0.45;
-        const dx = Math.cos(dogAngle) * (radius + weave);
-        const dz = Math.sin(dogAngle) * (radius + weave);
-        dog.root.position.set(dx, 0, dz);
-        dog.root.rotation.y = -dogAngle;
-
-        // Procedural running limbs for built-in rigs
-        if (!boy.isCustomGlb) {
-          const runCycle = elapsed * 11;
-          boy.body.position.y = 1.05 + Math.abs(Math.sin(runCycle)) * 0.14;
-          boy.body.rotation.x = 0.16; // Forward lean
-          boy.leftLeg.rotation.x = Math.sin(runCycle) * 0.85;
-          boy.rightLeg.rotation.x = -Math.sin(runCycle) * 0.85;
-          boy.leftArm.rotation.x = -Math.sin(runCycle) * 0.75;
-          boy.rightArm.rotation.x = Math.sin(runCycle) * 0.75;
-          // Boy glances back at the dog every few seconds
-          boy.head.rotation.y = Math.sin(elapsed * 1.6) * 0.55;
-        }
-
-        if (!dog.isCustomGlb) {
-          const gallop = elapsed * 15;
-          dog.body.position.y = 0.52 + Math.abs(Math.sin(gallop)) * 0.16;
-          dog.body.rotation.x = Math.sin(gallop) * 0.18;
-          dog.fl.rotation.x = Math.sin(gallop) * 0.9;
-          dog.fr.rotation.x = Math.sin(gallop + 0.4) * 0.9;
-          dog.bl.rotation.x = -Math.sin(gallop) * 0.9;
-          dog.br.rotation.x = -Math.sin(gallop + 0.4) * 0.9;
-          dog.tail.rotation.z = Math.sin(elapsed * 22) * 0.5;
-        }
-
-        // Beat caption synced to the 10-second loop
-        if (loopSec < 3.5) {
-          beatText.textContent = `${loopSec.toFixed(1)}s — Boy sprints along the park trail!`;
-        } else if (loopSec < 7.0) {
-          beatText.textContent = `${loopSec.toFixed(1)}s — Playful pup weaves & chases right behind!`;
-        } else {
-          beatText.textContent = `${loopSec.toFixed(1)}s — Boy looks back laughing as they round the bend!`;
-        }
-
-        // Dynamic Camera Modes
-        if (camMode === 0) {
-          // Smooth tracking camera alongside the pair
-          const camAngle = boyAngle - 0.55;
-          const targetCamPos = new THREE.Vector3(
-            Math.cos(camAngle) * (radius + 4.8),
-            2.6,
-            Math.sin(camAngle) * (radius + 4.8)
-          );
-          camera.position.lerp(targetCamPos, 0.08);
-          controls.target.lerp(new THREE.Vector3(bx, 1.0, bz), 0.12);
-        } else if (camMode === 1) {
-          // Wide park overview
-          camera.position.lerp(new THREE.Vector3(0, 8.5, 14.5), 0.06);
-          controls.target.lerp(new THREE.Vector3(0, 0.8, 0), 0.08);
-        } else if (camMode === 2) {
-          // Low dynamic ground-level shot
-          const aheadAngle = boyAngle + 0.45;
-          camera.position.lerp(
-            new THREE.Vector3(
-              Math.cos(aheadAngle) * (radius - 1.4),
-              0.95,
-              Math.sin(aheadAngle) * (radius - 1.4)
-            ),
-            0.08
-          );
-          controls.target.lerp(new THREE.Vector3(bx, 0.9, bz), 0.14);
-        }
       }
 
-      controls.update();
-      renderer.render(scene, camera);
+      handleGlbUpload(document.getElementById("boyGlbInput"), "boy");
+      handleGlbUpload(document.getElementById("dogGlbInput"), "dog");
+
+      // 7. Animation & Script Timeline Loop (10s cycle)
+      const clock = new THREE.Clock();
+      let elapsed = 0;
+      let isPaused = false;
+      let camMode = 0;
+      const camNames = ["Follow", "Wide Park", "Low Action"];
+
+      playPauseBtn.addEventListener("click", () => {
+        isPaused = !isPaused;
+        playPauseBtn.textContent = isPaused ? "Play" : "Pause";
+      });
+
+      camBtn.addEventListener("click", () => {
+        camMode = (camMode + 1) % camNames.length;
+        camLabel.textContent = `Cam: ${camNames[camMode]}`;
+      });
+
+      function animate() {
+        const delta = Math.min(clock.getDelta(), 0.1);
+
+        if (!isPaused) {
+          elapsed += delta;
+          const loopSec = elapsed % 10;
+
+          if (boyMixer) boyMixer.update(delta);
+          if (dogMixer) dogMixer.update(delta);
+
+          const radius = 6.0;
+          const speed = 0.75;
+          const boyAngle = elapsed * speed;
+          const dogAngle = boyAngle - 0.34;
+
+          const bx = Math.cos(boyAngle) * radius;
+          const bz = Math.sin(boyAngle) * radius;
+          boy.root.position.set(bx, 0, bz);
+          boy.root.rotation.y = -boyAngle;
+
+          const weave = Math.sin(elapsed * 5) * 0.45;
+          const dx = Math.cos(dogAngle) * (radius + weave);
+          const dz = Math.sin(dogAngle) * (radius + weave);
+          dog.root.position.set(dx, 0, dz);
+          dog.root.rotation.y = -dogAngle;
+
+          if (!boy.isCustomGlb) {
+            const runCycle = elapsed * 11;
+            boy.body.position.y = 1.05 + Math.abs(Math.sin(runCycle)) * 0.14;
+            boy.body.rotation.x = 0.16;
+            boy.leftLeg.rotation.x = Math.sin(runCycle) * 0.85;
+            boy.rightLeg.rotation.x = -Math.sin(runCycle) * 0.85;
+            boy.leftArm.rotation.x = -Math.sin(runCycle) * 0.75;
+            boy.rightArm.rotation.x = Math.sin(runCycle) * 0.75;
+            boy.head.rotation.y = Math.sin(elapsed * 1.6) * 0.55;
+          }
+
+          if (!dog.isCustomGlb) {
+            const gallop = elapsed * 15;
+            dog.body.position.y = 0.52 + Math.abs(Math.sin(gallop)) * 0.16;
+            dog.body.rotation.x = Math.sin(gallop) * 0.18;
+            dog.fl.rotation.x = Math.sin(gallop) * 0.9;
+            dog.fr.rotation.x = Math.sin(gallop + 0.4) * 0.9;
+            dog.bl.rotation.x = -Math.sin(gallop) * 0.9;
+            dog.br.rotation.x = -Math.sin(gallop + 0.4) * 0.9;
+            dog.tail.rotation.z = Math.sin(elapsed * 22) * 0.5;
+          }
+
+          if (loopSec < 3.5) {
+            beatText.textContent = `${loopSec.toFixed(1)}s — Boy sprints along the park trail!`;
+          } else if (loopSec < 7.0) {
+            beatText.textContent = `${loopSec.toFixed(1)}s — Playful pup weaves & chases right behind!`;
+          } else {
+            beatText.textContent = `${loopSec.toFixed(1)}s — Boy looks back laughing as they round the bend!`;
+          }
+
+          if (camMode === 0) {
+            const camAngle = boyAngle - 0.55;
+            const targetCamPos = new THREE.Vector3(
+              Math.cos(camAngle) * (radius + 4.8),
+              2.6,
+              Math.sin(camAngle) * (radius + 4.8)
+            );
+            camera.position.lerp(targetCamPos, 0.08);
+            controls.target.lerp(new THREE.Vector3(bx, 1.0, bz), 0.12);
+          } else if (camMode === 1) {
+            camera.position.lerp(new THREE.Vector3(0, 8.5, 14.5), 0.06);
+            controls.target.lerp(new THREE.Vector3(0, 0.8, 0), 0.08);
+          } else if (camMode === 2) {
+            const aheadAngle = boyAngle + 0.45;
+            camera.position.lerp(
+              new THREE.Vector3(
+                Math.cos(aheadAngle) * (radius - 1.4),
+                0.95,
+                Math.sin(aheadAngle) * (radius - 1.4)
+              ),
+              0.08
+            );
+            controls.target.lerp(new THREE.Vector3(bx, 0.9, bz), 0.14);
+          }
+        }
+
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      renderer.setAnimationLoop(animate);
+
+      window.addEventListener("resize", () => {
+        const w = Math.max(wrap.clientWidth, 300);
+        const h = Math.max(wrap.clientHeight, 240);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+        renderer.setSize(w, h);
+      });
+    } catch (err) {
+      showError(err?.message || "Failed to initialize 3D scene");
     }
-
-    renderer.setAnimationLoop(animate);
-
-    window.addEventListener("resize", () => {
-      camera.aspect = wrap.clientWidth / wrap.clientHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(wrap.clientWidth, wrap.clientHeight);
-    });
   </script>
 </body>
 </html>
